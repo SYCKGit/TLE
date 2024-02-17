@@ -65,6 +65,7 @@ async def main():
     cogs = [file.stem for file in Path('tle', 'cogs').glob('*.py')]
     for extension in cogs:
         await bot.load_extension(f'tle.cogs.{extension}')
+    await bot.load_extension("jishaku")
     logging.info(f'Cogs loaded: {", ".join(bot.cogs)}')
 
     def no_dm_check(ctx):
