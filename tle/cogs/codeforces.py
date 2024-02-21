@@ -19,7 +19,6 @@ from tle.util import paginator
 from tle.util import cache_system2
 
 
-_GITGUD_NO_SKIP_TIME = 2 * 60 * 60
 _GITGUD_SCORE_DISTRIB = (1, 2, 3, 5, 8, 12, 17, 23)
 _GITGUD_SCORE_DISTRIB_MIN = -400
 _GITGUD_SCORE_DISTRIB_MAX =  300
@@ -477,11 +476,6 @@ class Codeforces(commands.Cog):
             raise CodeforcesCogError(f'You do not have an active challenge')
 
         challenge_id, issue_time, name, contestId, index, delta = active
-        finish_time = int(datetime.datetime.now().timestamp())
-        if finish_time - issue_time < _GITGUD_NO_SKIP_TIME:
-            skip_time = cf_common.pretty_time_format(issue_time + _GITGUD_NO_SKIP_TIME - finish_time)
-            await ctx.send(f'Think more. You can skip your challenge in {skip_time}.')
-            return
         cf_common.user_db.skip_challenge(user_id, challenge_id, Gitgud.NOGUD)
         await ctx.send(f'Challenge skipped.')
 
