@@ -781,38 +781,44 @@ class UserDbConn:
         query = f'''
             SELECT COUNT(*) FROM duel WHERE (challengee = ? OR challenger = ?) AND guild_id = ? AND status == {Duel.COMPLETE}
         '''
-        return self.conn.execute(query, (userid, userid, guild_id)).fetchone()[0]
+        res = self.conn.execute(query, (userid, userid, guild_id)).fetchone()
+        return res[0] if res else 0
 
     def get_num_duel_draws(self, userid, guild_id):
         query = f'''
             SELECT COUNT(*) FROM duel WHERE (challengee = ? OR challenger = ?) AND guild_id = ? AND winner == {Winner.DRAW}
         '''
-        return self.conn.execute(query, (userid, userid, guild_id)).fetchone()[0]
+        res = self.conn.execute(query, (userid, userid, guild_id)).fetchone()
+        return res[0] if res else 0
 
     def get_num_duel_losses(self, userid, guild_id):
         query = f'''
             SELECT COUNT(*) FROM duel
             WHERE ((challengee = ? AND winner == {Winner.CHALLENGER}) OR (challenger = ? AND winner == {Winner.CHALLENGEE})) AND guild_id = ? AND status = {Duel.COMPLETE}
         '''
-        return self.conn.execute(query, (userid, userid, guild_id)).fetchone()[0]
+        res = self.conn.execute(query, (userid, userid, guild_id)).fetchone()
+        return res[0] if res else 0
 
     def get_num_duel_declined(self, userid, guild_id):
         query = f'''
             SELECT COUNT(*) FROM duel WHERE challengee = ? AND guild_id = ? AND status == {Duel.DECLINED}
         '''
-        return self.conn.execute(query, (userid, guild_id)).fetchone()[0]
+        res = self.conn.execute(query, (userid, guild_id)).fetchone()
+        return res[0] if res else 0
 
     def get_num_duel_rdeclined(self, userid, guild_id):
         query = f'''
             SELECT COUNT(*) FROM duel WHERE challenger = ? AND guild_id = ? AND status == {Duel.DECLINED}
         '''
-        return self.conn.execute(query, (userid,guild_id)).fetchone()[0]
+        res = self.conn.execute(query, (userid,guild_id)).fetchone()
+        return res[0] if res else 0
 
     def get_duel_rating(self, userid, guild_id):
         query = '''
             SELECT rating FROM duelist WHERE user_id = ? AND guild_id = ?
         '''
-        return self.conn.execute(query, (userid,guild_id)).fetchone()[0]
+        res = self.conn.execute(query, (userid,guild_id)).fetchone()
+        return res[0] if res else 0
 
     def is_duelist(self, userid, guild_id):
         query = '''
