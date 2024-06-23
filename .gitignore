@@ -116,3 +116,6 @@ pip-wheel-metadata/
 
 # logs
 /logs
+
+# Gemini API key
+api_key
