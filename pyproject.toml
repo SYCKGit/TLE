@@ -17,6 +17,9 @@ aiocache = "^0.11.1"
 jishaku = "^2.5.2"
 ujson = "^5.9.0"
 google-generativeai = "^0.3.2"
+google-api-python-client = "^2.134.0"
+google-auth-httplib2 = "^0.2.0"
+google-auth-oauthlib = "^1.2.0"
 
 [tool.poetry.dev-dependencies]
 pytest = "^3.0"

@@ -25,3 +25,9 @@ ALL_DIRS = (attrib_value for attrib_name, attrib_value in list(globals().items()
 
 TLE_ADMIN = os.environ.get('TLE_ADMIN', 'Admin')
 TLE_MODERATOR = os.environ.get('TLE_MODERATOR', 'Moderator')
+
+UFDS_GUILD_ID = int(os.environ.get("UFDS_GUILD_ID", "0"))
+VERIFIED_ROLE_ID = int(os.environ.get("VERIFIED_ROLE_ID", "0"))
+ALUMNI_ROLE_ID = int(os.environ.get("ALUMNI_ROLE_ID", "0"))
+UNVERIFIED_CHANNEL_ID = int(os.environ.get("UNVERIFIED_CHANNEL_ID", "0"))
+DECISION_CHANNEL_ID = int(os.environ.get("DECISION_CHANNEL_ID", "0"))
