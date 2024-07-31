@@ -2,10 +2,9 @@ import google.generativeai as genai
 from functools import partial
 from discord.ext import commands
 from aiohttp import ClientSession
+from os import environ
 
-with open("api_key", "r") as f:
-    key = f.read().strip()
-genai.configure(api_key=key)
+genai.configure(api_key=environ.get("GEMINI_KEY"))
 
 # Set up the model
 generation_config = {
