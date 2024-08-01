@@ -18,7 +18,7 @@ class VerificationStatus(Enum):
 
 @dataclass
 class Application:
-    timestamp: str
+    timestamp: datetime
     name: str
     class_: str
     dsc: str
@@ -72,7 +72,7 @@ async def app_embed(
 ):
     embed = discord.Embed(
         title=f"New Application: {app.dsc}",
-        timestamp=datetime.strptime(app.timestamp, "%m/%d/%Y %H:%M:%S"),
+        timestamp=app.timestamp,
         description=description,
         color=color
     )
@@ -128,7 +128,10 @@ class VerifyCog(commands.Cog):
             if eligible == "No" or class_ == "College or above":
                 if past == "None of the above": status = VerificationStatus.INELIGIBLE
                 else: status = VerificationStatus.POSSIBLE_ALUMNI
-            return status, Application(timestamp, name, class_, dsc, cf, cc, past, oi, exp, len(values) > 1)
+            return status, Application(
+                datetime.strptime(timestamp, "%m/%d/%Y %H:%M:%S"), name,
+                class_, dsc, cf, cc, past, oi, exp, len(values) > 1
+            )
 
         return VerificationStatus.NOT_APPLIED, None
 
@@ -217,7 +220,7 @@ class VerifyCog(commands.Cog):
     @commands.cooldown(3, 5*60, commands.BucketType.user)
     @commands.check(lambda ctx: ctx.channel.id == UCID and not ctx.author.get_role(VRID)) # type: ignore
     async def verify(self, ctx: commands.Context):
-        status = await self.check_verification(ctx.author) # type: ignore
+        status, app = await self.check_verification(ctx.author) # type: ignore
         if status == VerificationStatus.NOT_APPLIED:
             await ctx.reply("Please fill [this form](https://forms.gle/FJPfWg2cD9SJL4mD6) and use this command again to get verified!")
         elif status == VerificationStatus.PARTICIPANT:
