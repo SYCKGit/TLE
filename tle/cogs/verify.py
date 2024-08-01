@@ -40,7 +40,7 @@ RANGE = environ.get("RANGE")
 
 class ConfirmView(discord.ui.View):
     def __init__(self, app: Application, user_id: int, role_id: int, accept_action, reject_action):
-        super().__init__()
+        super().__init__(timeout=None)
         self.app = app
         self.accept_action = accept_action
         self.reject_action = reject_action
