@@ -56,13 +56,14 @@ class ConfirmView(discord.ui.View):
         embed = interaction.message.embeds[0].copy()
         embed.colour = discord.Color.green()
         embed.description = "✅ **Accepted**"
+        embed.set_footer(text=f"Accepted by {interaction.user}", icon_url=interaction.user.display_avatar.url)
         await interaction.message.edit(embed=embed, view=None)
         self.stop()
 
     @discord.ui.button(emoji="✖️", style=discord.ButtonStyle.red)
     async def reject(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True, thinking=True)
-        await self.reject_action(self.app, self.user_id, interaction.message)
+        await self.reject_action(interaction.user, self.app, self.user_id, interaction.message)
         await interaction.followup.send("❌ Successfully Rejected!", ephemeral=True)
         self.stop()
 
@@ -158,11 +159,12 @@ class VerifyCog(commands.Cog):
         ))
 
     async def reject_user(
-            self, app: Application, user_id: int, message: discord.Message
+            self, executor: discord.Member, app: Application, user_id: int, message: discord.Message
     ):
         embed = message.embeds[0].copy()
         embed.colour = discord.Color.red()
         embed.description = "❌ **Rejected**"
+        embed.set_footer(text=f"Rejected by {executor}", icon_url=executor.display_avatar.url)
         await message.edit(embed=embed, view=None)
         member = self.bot.get_guild(GID).get_member(user_id) # type: ignore
         if not member: return
@@ -183,7 +185,7 @@ class VerifyCog(commands.Cog):
         else:
             await self.bot.get_channel(DCID).send(embed=embed, view=view) # type: ignore
 
-    async def reject_alumni(self, app: Application, user_id: int, message: discord.Message):
+    async def reject_alumni(self, executor: discord.Member, app: Application, user_id: int, message: discord.Message):
         await self.participant_application(app, user_id, message)
 
     async def create_application(self, member: discord.Member, not_applied_callback):
