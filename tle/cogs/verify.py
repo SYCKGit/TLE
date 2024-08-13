@@ -233,6 +233,8 @@ class VerifyCog(commands.Cog):
     @verify.error
     async def verify_error(self, ctx: commands.Context, exc: commands.CommandError):
         if isinstance(exc, commands.CheckFailure):
+            if isinstance(ctx.author, discord.Member) and ctx.author.get_role(VRID):
+                await ctx.reply("You are already verified!")
             exc.handled = True # type: ignore
 
 async def setup(bot: commands.Bot):
