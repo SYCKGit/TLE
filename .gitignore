@@ -119,3 +119,6 @@ pip-wheel-metadata/
 
 # credentials
 credentials.json
+
+history.txt
+priy.json
