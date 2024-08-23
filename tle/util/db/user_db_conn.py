@@ -77,10 +77,14 @@ def namedtuple_factory(cursor, row):
 
 
 class UserDbConn:
+    role_cache: dict[tuple[int, str], int]
+
     def __init__(self, dbfile):
         self.conn = sqlite3.connect(dbfile)
         self.conn.row_factory = namedtuple_factory
+        self.role_cache = {}
         self.create_tables()
+        self.populate_cache()
 
     def create_tables(self):
         self.conn.execute(
@@ -304,6 +308,21 @@ class UserDbConn:
                 "end_time" INT
             )
             ''')
+
+        self.conn.execute('''
+            CREATE TABLE IF NOT EXISTS role_reactions (
+                message_id INTEGER,
+                role_id INTEGER,
+                emoji TEXT,
+                PRIMARY KEY(message_id, emoji)
+            )
+        ''')
+
+    def populate_cache(self):
+        self.role_cache.clear()
+        query = 'SELECT message_id, emoji, role_id FROM role_reactions'
+        for message_id, emoji, role_id in self.conn.execute(query).fetchall():
+            self.role_cache[(message_id, emoji)] = role_id
 
     # Helper functions.
 
@@ -1308,6 +1327,27 @@ class UserDbConn:
         cur.close()
         Round = namedtuple('Round', 'guild users rating points time problems status duration repeat times end_time')
         return [Round(data[1], data[2], data[3], data[4], data[5], data[6], data[7], data[8], data[9], data[10], data[11]) for data in res]
+
+    def add_role_reaction(self, message_id: int, role_id: int, emoji: str):
+        query = '''
+            INSERT INTO role_reactions (message_id, role_id, emoji)
+            VALUES (?, ?, ?)
+        '''
+        with self.conn:
+            self.conn.execute(query, (message_id, role_id, emoji))
+        self.role_cache[(message_id, emoji)] = role_id
+
+    def remove_role_reaction(self, message_id: int, emoji: str):
+        query = '''
+            DELETE FROM role_reactions
+            WHERE message_id = ? AND emoji = ?
+        '''
+        with self.conn:
+            self.conn.execute(query, (message_id, emoji))
+        self.role_cache.pop((message_id, emoji), None)
+
+    def get_role_reaction(self, message_id: int, emoji: str):
+        return self.role_cache.get((message_id, emoji))
 
     def close(self):
         self.conn.close()
