@@ -20,7 +20,7 @@ from tle.util import paginator
 
 logger = logging.getLogger(__name__)
 
-MAX_ROUND_USERS = 5
+MAX_ROUND_USERS = 10
 LOWER_RATING = 800
 UPPER_RATING = 3500
 MATCH_DURATION = [5, 180]
