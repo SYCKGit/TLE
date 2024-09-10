@@ -20,7 +20,6 @@ from tle.util import paginator
 
 logger = logging.getLogger(__name__)
 
-MAX_ROUND_USERS = 5
 LOWER_RATING = 800
 UPPER_RATING = 3500
 MATCH_DURATION = [5, 180]
@@ -283,8 +282,6 @@ class Round(commands.Cog):
         members = list(set(members))
         if ctx.author not in members:
             members.append(ctx.author)
-        if len(members) > MAX_ROUND_USERS:
-            raise RoundCogError(f'{ctx.author.mention} atmost {MAX_ROUND_USERS} users can compete at a time') 
 
         # get handles first. This also checks if discord member has a linked handle!
         handles = cf_common.members_to_handles(members, ctx.guild.id)            
@@ -573,9 +570,6 @@ class Round(commands.Cog):
 #             return
 #         if ctx.author not in users:
 #             users.append(ctx.author)
-#         if len(users) > MAX_ROUND_USERS:
-#             await ctx.send(f"{ctx.author.mention} atmost {MAX_ROUND_USERS} users can compete at a time")
-#             return
 #         for i in users:
 #             if not self.db.get_handle(ctx.guild.id, i.id):
 #                 await discord_.send_message(ctx, f"Handle for {i.mention} not set! Use `.handle identify` to register")
