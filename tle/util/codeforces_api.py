@@ -1,8 +1,12 @@
 import asyncio
 import logging
+import os
 import time
 import functools
 from collections import namedtuple, deque, defaultdict
+from hashlib import sha512
+from random import randint
+from urllib.parse import urlencode
 
 import aiohttp
 
@@ -17,6 +21,8 @@ PROFILE_BASE_URL = 'https://codeforces.com/profile/'
 ACMSGURU_BASE_URL = 'https://codeforces.com/problemsets/acmsguru/'
 GYM_ID_THRESHOLD = 100000
 DEFAULT_RATING = 800
+API_KEY = os.environ.get("API_KEY")
+API_SECRET = os.environ.get("API_SECRET")
 
 logger = logging.getLogger(__name__)
 
@@ -254,8 +260,18 @@ def cf_ratelimit(f):
 
 
 @cf_ratelimit
-async def _query_api(path, data=None):
+async def _query_api(path, data=None, *, public=True):
     url = API_BASE_URL + path
+    if not public:
+        if data is None:
+            data = {}
+        data['apiKey'] = API_KEY
+        data['time'] = int(time.time())
+
+        rand = str(randint(0, 100000)).zfill(6)
+        encoded = urlencode([(k, data[k]) for k in sorted(data.keys())])
+        url +=  "?apiSig=" + rand + sha512(f"{rand}/{path}?{encoded}#{API_SECRET}".encode()).hexdigest()
+
     try:
         logger.info(f'Querying CF API at {url} with {data}')
         # Explicitly state encoding (though aiohttp accepts gzip by default)
@@ -302,7 +318,7 @@ class contest:
 
     @staticmethod
     async def standings(*, contest_id, from_=None, count=None, handles=None, room=None,
-                        show_unofficial=None):
+                        show_unofficial=None, group_code=None, as_manager=None):
         params = {'contestId': contest_id}
         if from_ is not None:
             params['from'] = from_
@@ -314,8 +330,12 @@ class contest:
             params['room'] = room
         if show_unofficial is not None:
             params['showUnofficial'] = _bool_to_str(show_unofficial)
+        if as_manager is not None:
+            params['asManager'] = _bool_to_str(as_manager)
+        if group_code is not None:
+            params["groupCode"] = group_code
         try:
-            resp = await _query_api('contest.standings', params)
+            resp = await _query_api('contest.standings', params, public=(group_code is None and as_manager is None))
         except TrueApiError as e:
             if 'not found' in e.comment:
                 raise ContestNotFoundError(e.comment, contest_id)
