@@ -56,11 +56,11 @@ class FunCog(commands.Cog):
         await message.delete()
         wh = await self.get_webhook(message.channel)
         try:
-            await wh.send(content, username=name, avatar_url=avatar)
+            await wh.send(content, username=name, avatar_url=avatar, allowed_mentions=discord.AllowedMentions(everyone=False, users=True, roles=False, replied_user=True))
         except discord.NotFound:
             del self.webhooks[channel.id]
             wh = await self.get_webhook(message.channel)
-            await wh.send(content, username=name, avatar_url=avatar)
+            await wh.send(content, username=name, avatar_url=avatar, allowed_mentions=discord.AllowedMentions(everyone=False, users=True, roles=False, replied_user=True))
 
     @commands.command(aliases=["say-as", "sayas"])
     async def say(self, ctx: commands.Context, user: MemberConverter, *, content: str):
