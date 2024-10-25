@@ -55,19 +55,20 @@ class FunCog(commands.Cog):
     async def perform_sayas(self, message: discord.Message, content: str, name: str, avatar: str):
         await message.delete()
         wh = await self.get_webhook(message.channel)
+        allowed_mentions = discord.AllowedMentions(everyone=False, roles=False)
         try:
-            await wh.send(content, username=name, avatar_url=avatar)
+            await wh.send(content, username=name, avatar_url=avatar, allowed_mentions=allowed_mentions)
         except discord.NotFound:
             del self.webhooks[channel.id]
             wh = await self.get_webhook(message.channel)
-            await wh.send(content, username=name, avatar_url=avatar)
+            await wh.send(content, username=name, avatar_url=avatar, allowed_mentions=allowed_mentions)
 
     @commands.command(aliases=["say-as", "sayas"])
     async def say(self, ctx: commands.Context, user: MemberConverter, *, content: str):
         if user.id == ctx.bot.user.id:
             await ctx.message.delete()
             await ctx.send(content)
-        await self.perform_sayas(ctx.message, content, user.display_name, user.display_avatar.url);
+        await self.perform_sayas(ctx.message, content, user.display_name, user.display_avatar.url)
 
     @commands.command(aliases=["nsay-as", "nsayas"])
     async def nsay(self, ctx: commands.Context, name: str, avatar: str, *, content: str):
