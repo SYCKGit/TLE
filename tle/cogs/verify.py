@@ -209,7 +209,7 @@ class VerifyCog(commands.Cog):
         if member.guild.id != GID: return
         await self.create_application(
             member,
-            lambda: self.dm(member, f"Please fill [this form](https://forms.gle/FJPfWg2cD9SJL4mD6) and use the `;verify` command in the <#{UCID}> channel to get verified!")
+            lambda: self.dm(member, f"Please fill [this form](https://forms.gle/MPjcro9EUQkRtVQz5) and use the `;verify` command in the <#{UCID}> channel to get verified!")
         )
 
     @commands.command()
@@ -224,7 +224,7 @@ class VerifyCog(commands.Cog):
     async def verify(self, ctx: commands.Context):
         status, app = await self.check_verification(ctx.author) # type: ignore
         if status == VerificationStatus.NOT_APPLIED:
-            await ctx.reply("Please fill [this form](https://forms.gle/FJPfWg2cD9SJL4mD6) and use this command again to get verified!")
+            await ctx.reply("Please fill [this form](https://forms.gle/MPjcro9EUQkRtVQz5) and use this command again to get verified!")
         elif status == VerificationStatus.PARTICIPANT:
             await ctx.message.add_reaction("✅")
         else:
