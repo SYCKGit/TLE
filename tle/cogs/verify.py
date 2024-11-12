@@ -119,12 +119,12 @@ class VerifyCog(commands.Cog):
         values = result.get("values", [])[::-1][:-1]
         if not values:
             raise ValueError("No data found")
-        values = [row for row in values if row[4].strip() == username]
+        values = [row for row in values if row[5].strip() == username]
 
         for row in values:
-            while len(row) < 10:
+            while len(row) < 11:
                 row.append("")
-            timestamp, name, class_, eligible, dsc, cf, cc, past, oi, exp = row
+            timestamp, email, name, class_, eligible, dsc, cf, cc, past, oi, exp = row
             status = VerificationStatus.PARTICIPANT
             if eligible == "No" or class_ == "College or above":
                 if past == "None of the above": status = VerificationStatus.INELIGIBLE
