@@ -625,23 +625,15 @@ class Handles(commands.Cog):
                 if user is None:
                     continue
                 rating = user.rating
-                
+                if rating is None: continue
+
                 discord_handle = ""
-                if member is not None: 
-                    discord_handle = member.display_name                
-                
-                #### Live checking of a rating is not working since we get rate limited
-                #### Taking stuff from cache instead
-                rating_changes = cache.get_rating_changes_for_handle(handle)
-                rating_changes = [change for change in rating_changes if change.ratingUpdateTimeSeconds < start_time]
-                rating_changes.sort(key=lambda a: a.ratingUpdateTimeSeconds)
-                if len(rating_changes) < 1: 
-                    continue
-                if rating_changes[-1] is None: continue
+                if member is not None:
+                    discord_handle = member.display_name
+
                 if division is not None:
-                    if rating_changes[-1].newRating < _DIVISION_RATING_LOW[division-1] or rating_changes[-1].newRating > _DIVISION_RATING_HIGH[division-1]:
+                    if rating < _DIVISION_RATING_LOW[division-1] or rating > _DIVISION_RATING_HIGH[division-1]:
                         continue
-                rating = rating_changes[-1].newRating
                 rankings.append((index, discord_handle, handle, rating, score))
                 index += 1
             if index == 20:
