@@ -1,4 +1,5 @@
 import discord
+import re
 from datetime import datetime
 from discord.ext import commands
 from tle import constants
@@ -19,34 +20,54 @@ async def get_solvers(contest_id: int) -> tuple[str, set[str]]:
                 solvers.add(member.handle)
     return contest.name, solvers
 
-class AccessView(discord.ui.View):
+class JoinButton(
+    discord.ui.DynamicItem[discord.ui.Button],
+    template=r"button:join:(?P<contest_id>[0-9]+):(?P<thread_id>[0-9]+)"
+):
     def __init__(self, contest_id: int, thread_id: int):
-        super().__init__(timeout=None)
+        super().__init__(
+            discord.ui.Button(
+                label="Join", style=discord.ButtonStyle.green,
+                custom_id=f"button:join:{contest_id}:{thread_id}"
+            )
+        )
         self.contest_id = contest_id
         self.thread_id = thread_id
 
-    @discord.ui.button(label="Join", style=discord.ButtonStyle.green)
-    async def join(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match: re.Match[str]):
+        contest_id = int(match["contest_id"])
+        thread_id = int(match["thread_id"])
+        return cls(contest_id, thread_id)
+
+    async def callback(self, interaction: discord.Interaction):
         handle = cf_common.user_db.get_handle(interaction.user.id, interaction.guild_id) # type: ignore
-        print(interaction.user.id, interaction.guild_id, handle)
         if not handle:
             await interaction.response.send_message("You need to set your handle first.", ephemeral=True)
             return
+        await interaction.response.defer(thinking=True, ephemeral=True)
         contest, solvers = await get_solvers(self.contest_id)
         if handle not in solvers:
-            await interaction.response.send_message(f"Pleae attempt {contest} before accessing the discussion thread.", ephemeral=True)
+            await interaction.followup.send(f"Please attempt {contest} before accessing the discussion thread.", ephemeral=True)
             return
         thread = interaction.guild.get_channel(DISCUSSION_CHANNEL_ID).get_thread(self.thread_id) # type: ignore
         if not thread:
             raise RoleCogError(f"Thread {self.thread_id} not found.")
         await thread.add_user(interaction.user)
-        await interaction.response.send_message("Successfully joined the discussion thread.", ephemeral=True)
+        await interaction.followup.send("Successfully joined the discussion thread.", ephemeral=True)
+
+class AccessView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
 
 class RolesCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.thread_id: int | None = None
-        self.contest_id: int | None = None
+        bot.add_view(AccessView())
+        bot.add_dynamic_items(JoinButton)
+
+    async def cog_unload(self):
+        self.bot.remove_dynamic_items(JoinButton)
 
     @commands.group(invoke_without_command=True)
     @commands.has_any_role(constants.TLE_ADMIN, constants.TLE_MODERATOR)
@@ -89,12 +110,12 @@ class RolesCog(commands.Cog):
     async def discussion(self, ctx: commands.Context):
         await ctx.send_help(ctx.command)
 
-    async def setup_discussion(self, ctx: commands.Context, *, title: str | None = None, solvers: set[str] | None = None):
-        if not (self.contest_id and self.thread_id):
-            raise RoleCogError("Contest ID or thread ID not set.")
-
+    async def setup_discussion(
+        self, ctx: commands.Context, *, title: str | None = None,
+        solvers: set[str] | None = None, contest_id: int, thread_id: int
+    ):
         if not (title and solvers):
-            title, solvers = await get_solvers(self.contest_id)
+            title, solvers = await get_solvers(contest_id)
 
         discussions: discord.TextChannel = ctx.guild.get_channel(DISCUSSION_CHANNEL_ID) # type: ignore
         color = None
@@ -104,21 +125,15 @@ class RolesCog(commands.Cog):
             color = 0x3498db
         elif title.lower().startswith("ioitc"):
             color = 0x9b59b6
+        view = AccessView()
+        view.add_item(JoinButton(contest_id, thread_id))
         await discussions.send(
             embed=discord.Embed(
                 title=f"{title} Discussion", color=color,
                 description="Please click the button below to join the discussion thread."
             ),
-            view=AccessView(self.contest_id, self.thread_id)
+            view=view
         )
-
-        thread: discord.Thread = discussions.get_thread(self.thread_id) # type: ignore
-        for handle in solvers:
-            id = cf_common.user_db.get_user_id(handle, ctx.guild.id) # type: ignore
-            if id:
-                member = ctx.guild.get_member(id) # type: ignore
-                if member:
-                    await thread.add_user(member)
 
     @discussion.command() # type: ignore
     @commands.has_any_role(constants.TLE_ADMIN, constants.TLE_MODERATOR)
@@ -133,16 +148,14 @@ class RolesCog(commands.Cog):
         thread = await discussions.create_thread(name=f"{title} Discussion", type=discord.ChannelType.private_thread, invitable=False)
         await thread.send(f"Please use this thread to discuss [{title}]({message.jump_url}).")
 
-        self.thread_id = thread.id
-        self.contest_id = contest_id
-        await self.setup_discussion(ctx, title=title, solvers=solvers)
+        await self.setup_discussion(
+            ctx, title=title, solvers=solvers, contest_id=contest_id, thread_id=thread.id
+        )
 
     @discussion.command() # type: ignore
     @commands.has_any_role(constants.TLE_ADMIN, constants.TLE_MODERATOR)
     async def assign(self, ctx: commands.Context, contest_id: int, thread: discord.Thread):
-        self.contest_id = contest_id
-        self.thread_id = thread.id
-        await self.setup_discussion(ctx)
+        await self.setup_discussion(ctx, contest_id=contest_id, thread_id=thread.id)
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(RolesCog(bot))
