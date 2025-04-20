@@ -1,7 +1,6 @@
 import google.generativeai as genai
 from functools import partial
 from discord.ext import commands
-from aiohttp import ClientSession
 from os import environ
 
 genai.configure(api_key=environ.get("GEMINI_KEY"))
@@ -33,9 +32,6 @@ safety_settings = [
     }
 ]
 
-async def in_ag(ctx):
-    return ctx.guild and ctx.guild.id == 1190034382560436274
-
 class AICog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -44,10 +40,6 @@ class AICog(commands.Cog):
             generation_config=generation_config,
             safety_settings=safety_settings
         )
-        self.sus_url = ""
-        self.sus_model_name = "wizard-vicuna-uncensored:13b"
-        self.api_retry = 3
-        self.session = ClientSession()
         self.convos = {0: self.model.start_chat(history=[])}
 
     async def break_reply(self, ctx, text):
@@ -70,26 +62,6 @@ class AICog(commands.Cog):
             return await ctx.send(str(exc))
         await ctx.send("There was an error :(")
         raise exc
-
-    @commands.command()
-    @commands.cooldown(1, 5, commands.BucketType.user)
-    async def sus(self, ctx, *, prompt):
-        for _ in range(self.api_retry):
-            try:
-                resp = await self.session.post(f"https://{self.sus_url}/api/generate", json={"model": self.sus_model_name, "prompt": prompt, "stream": False, "options": dict(temperature=1)})
-                text = (await resp.json())["response"]
-                break
-            except:
-                continue
-        else:
-            return await ctx.reply("There was an error connecting to sus API 😔")
-        await self.break_reply(ctx, text)
-
-    @commands.command()
-    @commands.check(in_ag)
-    async def susurl(self, ctx, url):
-        self.sus_url = url
-        await ctx.message.add_reaction("✅")
 
     async def send_msg(self, ctx, id, prompt):
         await self.bot.loop.run_in_executor(None, partial(self.convos[id].send_message, prompt))
