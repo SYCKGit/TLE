@@ -1,10 +1,14 @@
 import discord
 from discord.ext import commands
+from os import environ
+
+phid = int(environ.get("PROBLEM_HELP_CHANNEL_ID", 0))
+ghid = int(environ.get("GENERAL_HELP_CHANNEL_ID", 0))
 
 def can_use_solved(ctx: commands.Context):
     return (
         isinstance(ctx.channel, discord.Thread)
-        and ctx.channel.parent_id in [1254146483310035048, 1281034435172499561]
+        and ctx.channel.parent_id in [phid, ghid]
         and ctx.channel.owner_id == ctx.author.id
     )
 

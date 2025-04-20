@@ -2,10 +2,13 @@ import discord
 import re
 from datetime import datetime
 from discord.ext import commands
+from os import environ
 from tle import constants
 from tle.util import codeforces_common as cf_common, codeforces_api as cf_api
 
-DISCUSSION_CHANNEL_ID = 1292109866835640320
+DISCUSSION_CHANNEL_ID = environ.get("MOCK_DISCUSSION_CHANNEL_ID", 0)
+REMINDER_CHANNEL_ID = environ.get("MOCK_REMINDER_CHANNEL_ID", 0)
+REMINDER_ROLE_ID = environ.get("MOCK_REMINDER_ROLE_ID", 0)
 
 class RoleCogError(commands.CommandError):
     pass
@@ -140,9 +143,8 @@ class RolesCog(commands.Cog):
     async def create(self, ctx: commands.Context, message: discord.Message, contest_id: int):
         title, solvers = await get_solvers(contest_id)
 
-        # tbh no one else is running this bot, I'm not gonna use annoying environment variables
-        reminders: discord.TextChannel = ctx.guild.get_channel(1281630596098949122) # type: ignore
-        await reminders.send(f"<@&1280987530178859072> The contest window for [{title}]({message.jump_url}) has officially begun. To start your contest window, click on the 'virtual participation' button right below the contest's name on [Codeforces](https://codeforces.com/group/pdEaEqYLGP/contests). As a reminder, we *recommend* that you participate tomorrow from 2:00 PM to 5:00 PM, but it is up to you.\n\nGood luck!")
+        reminders: discord.TextChannel = ctx.guild.get_channel(REMINDER_CHANNEL_ID) # type: ignore
+        await reminders.send(f"<@&{REMINDER_ROLE_ID}> The contest window for [{title}]({message.jump_url}) has officially begun. To start your contest window, click on the 'virtual participation' button right below the contest's name on [Codeforces](https://codeforces.com/group/pdEaEqYLGP/contests). As a reminder, we *recommend* that you participate tomorrow from 2:00 PM to 5:00 PM, but it is up to you.\n\nGood luck!")
 
         discussions: discord.TextChannel = ctx.guild.get_channel(DISCUSSION_CHANNEL_ID) # type: ignore
         thread = await discussions.create_thread(name=f"{title} Discussion", type=discord.ChannelType.private_thread, invitable=False)
