@@ -96,7 +96,11 @@ class RolesCog(commands.Cog):
         if not guild: return
         member = guild.get_member(payload.user_id)
         if not member: return
-        await member.add_roles(discord.Object(id=role_id))
+        role = guild.get_role(role_id)
+        if not role or role in member.roles: return
+        if role.name == "off topic" and any(r.name == "8th or below" for r in member.roles):
+            return
+        await member.add_roles(role)
 
     @commands.Cog.listener()
     async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent):
