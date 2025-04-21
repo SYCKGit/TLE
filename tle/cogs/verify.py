@@ -29,7 +29,7 @@ class Application:
     exp: str
     duplicate: bool = False
 
-GID = int(environ.get("UFDS_GUILD_ID", "0"))
+GID = int(environ.get("SPOI_GUILD_ID", "0"))
 VRID = int(environ.get("VERIFIED_ROLE_ID", "0"))
 ARID = int(environ.get("ALUMNI_ROLE_ID", "0"))
 ZCOID = int(environ.get("ZCO_TRACK_ROLE_ID", "0"))
@@ -203,7 +203,7 @@ class VerifyCog(commands.Cog):
         elif app and status == VerificationStatus.POSSIBLE_ALUMNI:
             embed = await app_embed(
                 app, "Alumni", 0x00ffff,
-                "Is this a UFDS alumnus? If not, then you can still accept them as a participant."
+                "Is this an SPOI alumnus? If not, then you can still accept them as a participant."
             )
             channel: discord.TextChannel = self.bot.get_channel(DCID) # type: ignore
             await channel.send(

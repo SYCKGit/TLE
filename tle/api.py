@@ -4,7 +4,7 @@ from uvicorn import Config, Server, run
 import json
 from os import path, environ
 
-GID = int(environ.get("UFDS_GUILD_ID", "0"))
+GID = int(environ.get("SPOI_GUILD_ID", "0"))
 VRID = int(environ.get("VERIFIED_ROLE_ID", "0"))
 
 verification_api = FastAPI()
