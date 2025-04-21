@@ -36,6 +36,7 @@ ZCOID = int(environ.get("ZCO_TRACK_ROLE_ID", "0"))
 UCID = int(environ.get("UNVERIFIED_CHANNEL_ID", "0"))
 DCID = int(environ.get("DECISION_CHANNEL_ID", "0"))
 SPREADSHEET_ID = environ.get("SPREADSHEET_ID")
+FORM_URL = environ.get("FORM_URL")
 RANGE = environ.get("RANGE")
 
 class ConfirmView(discord.ui.View):
@@ -51,7 +52,7 @@ class ConfirmView(discord.ui.View):
     async def accept(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not interaction.message: return # just for typing
         await interaction.response.defer(ephemeral=True, thinking=True)
-        await self.accept_action(self.user_id, self.role_id)
+        await self.accept_action(self.user_id, self.role_id, self.app.class_)
         await interaction.followup.send("✅ Successfully Accepted!", ephemeral=True)
         embed = interaction.message.embeds[0].copy()
         embed.colour = discord.Color.green()
@@ -138,8 +139,11 @@ class VerifyCog(commands.Cog):
 
     async def check_verification(self, member: discord.Member) -> tuple[VerificationStatus, Application | None]:
         status, app = await self.bot.loop.run_in_executor(None, partial(self.check_verification_sync, member.name))
-        if status == VerificationStatus.PARTICIPANT:
-            await member.add_roles(discord.Object(VRID), discord.Object(ZCOID))
+        if status == VerificationStatus.PARTICIPANT and app:
+            await member.add_roles(
+                discord.Object(VRID), discord.Object(ZCOID),
+                next(role for role in member.guild.roles if role.name == app.class_)
+            )
         return status, app
 
     async def dm(self, member: discord.Member, *args, **kwargs):
@@ -148,13 +152,17 @@ class VerifyCog(commands.Cog):
         except:
             pass
 
-    async def accept_user(self, user_id: int, role_id: int):
+    async def accept_user(self, user_id: int, role_id: int, class_: str):
         member = self.bot.get_guild(GID).get_member(user_id) # type: ignore
         if not member: return
-        await member.add_roles(discord.Object(VRID), discord.Object(role_id))
+        role: discord.Role = member.guild.get_role(role_id) # type: ignore
+        await member.add_roles(
+            discord.Object(VRID), role,
+            next(role for role in member.guild.roles if role.name == class_)
+        )
         await self.dm(member, embed=discord.Embed(
             title="🎉 Congratulations!",
-            description="You have been accepted into the SPOI program! You now have access to the server and have been assigned to the ZCO track.",
+            description=f"You have been accepted into the SPOI program! You now have access to the server and have been assigned the {role.name} role.",
             color=discord.Color.green()
         ))
 
@@ -209,7 +217,7 @@ class VerifyCog(commands.Cog):
         if member.guild.id != GID: return
         await self.create_application(
             member,
-            lambda: self.dm(member, f"Please fill [this form](https://forms.gle/MPjcro9EUQkRtVQz5) and use the `;verify` command in the <#{UCID}> channel to get verified!")
+            lambda: self.dm(member, f"Please fill [this form]({FORM_URL}) and use the `;verify` command in the <#{UCID}> channel to get verified!")
         )
 
     @commands.command()
@@ -224,7 +232,7 @@ class VerifyCog(commands.Cog):
     async def verify(self, ctx: commands.Context):
         status, app = await self.check_verification(ctx.author) # type: ignore
         if status == VerificationStatus.NOT_APPLIED:
-            await ctx.reply("Please fill [this form](https://forms.gle/MPjcro9EUQkRtVQz5) and use this command again to get verified!")
+            await ctx.reply(f"Please fill [this form]({FORM_URL}) and use this command again to get verified!")
         elif status == VerificationStatus.PARTICIPANT:
             await ctx.message.add_reaction("✅")
         else:
