@@ -6,9 +6,9 @@ from os import environ
 from tle import constants
 from tle.util import codeforces_common as cf_common, codeforces_api as cf_api
 
-DISCUSSION_CHANNEL_ID = environ.get("MOCK_DISCUSSION_CHANNEL_ID", 0)
-REMINDER_CHANNEL_ID = environ.get("MOCK_REMINDER_CHANNEL_ID", 0)
-REMINDER_ROLE_ID = environ.get("MOCK_REMINDER_ROLE_ID", 0)
+DISCUSSION_CHANNEL_ID = int(environ.get("MOCK_DISCUSSION_CHANNEL_ID", 0))
+REMINDER_CHANNEL_ID = int(environ.get("MOCK_REMINDER_CHANNEL_ID", 0))
+REMINDER_ROLE_ID = int(environ.get("MOCK_REMINDER_ROLE_ID", 0))
 
 class RoleCogError(commands.CommandError):
     pass
