@@ -1,10 +1,13 @@
 import sqlite3
+import datetime
+import zoneinfo
+import secrets
 from enum import IntEnum
 from collections import namedtuple
 
 from discord.ext import commands
 
-from tle.util import codeforces_api as cf
+from tle.util import codeforces_api as cf, paginator
 from tle.util import codeforces_common as cf_common
 
 _DEFAULT_VC_RATING = 1500
@@ -83,10 +86,13 @@ class UserDbConn:
         self.conn = sqlite3.connect(dbfile)
         self.conn.row_factory = namedtuple_factory
         self.role_cache = {}
+        self.guild_cache = {}
         self.create_tables()
         self.populate_cache()
 
     def create_tables(self):
+        self.conn.execute('PRAGMA foreign_keys = ON;')
+
         self.conn.execute(
             'CREATE TABLE IF NOT EXISTS user_handle ('
             'user_id     TEXT,'
@@ -317,7 +323,67 @@ class UserDbConn:
                 PRIMARY KEY(message_id, emoji)
             )
         ''')
-
+        self.conn.execute('''
+            CREATE TABLE IF NOT EXISTS gym_members (
+                discord_id INTEGER PRIMARY KEY NOT NULL, 
+                units INTEGER DEFAULT FALSE NOT NULL,
+                tz TEXT DEFAULT "Asia/Kolkata" NOT NULL
+            )
+        ''')
+        self.conn.execute('''
+            CREATE TABLE IF NOT EXISTS gym_exercises (
+                name STRING PRIMARY KEY
+            )
+        ''')
+        self.conn.execute('''
+            CREATE TABLE IF NOT EXISTS gym_records (
+                exercise TEXT NOT NULL REFERENCES gym_exercises ON UPDATE CASCADE,
+                type TEXT NOT NULL, 
+                amount REAL NOT NULL,
+                workout INTEGER NOT NULL REFERENCES gym_workouts,
+                PRIMARY KEY(exercise, type)
+            )
+        ''')
+        self.conn.execute('''
+            CREATE TABLE IF NOT EXISTS gym_recurring_sessions (
+                id INTEGER PRIMARY KEY,
+                user INTEGER NOT NULL REFERENCES gym_members,
+                day INTEGER NOT NULL,
+                time INTEGER NOT NULL,
+                next INTEGER NOT NULL
+            )
+        ''')
+        self.conn.execute('''
+            CREATE TABLE IF NOT EXISTS gym_sessions (
+                id INTEGER PRIMARY KEY,
+                user INTEGER NOT NULL REFERENCES gym_members,
+                datetime INTEGER NOT NULL,
+                status TEXT NOT NULL
+            )
+        ''')
+        self.conn.execute('''
+            CREATE TABLE IF NOT EXISTS gym_workouts (
+                id INTEGER PRIMARY KEY,
+                user INTEGER NOT NULL REFERENCES gym_members,
+                session INTEGER NOT NULL REFERENCES gym_sessions,
+                exercise TEXT NOT NULL REFERENCES gym_exercises ON UPDATE CASCADE,
+                sets INTEGER NOT NULL,
+                reps INTEGER NOT NULL,
+                time REAL,
+                weight REAL,
+                length REAL
+            )
+        ''')
+        self.conn.execute('''
+            CREATE TABLE IF NOT EXISTS gym_guilds (
+                guild INTEGER PRIMARY KEY,
+                channel INTEGER,
+                role INTEGER
+            )
+        ''')
+        
+        
+        
     def populate_cache(self):
         self.role_cache.clear()
         query = 'SELECT message_id, emoji, role_id FROM role_reactions'
@@ -929,7 +995,7 @@ class UserDbConn:
 
     # Rated VC stuff
 
-    def create_rated_vc(self, contest_id: int, start_time: float, finish_time: float, guild_id: str, user_ids: [str]):
+    def create_rated_vc(self, contest_id: int, start_time: float, finish_time: float, guild_id: str, user_ids: list[str]):
         """ Creates a rated vc and returns its id.
         """
         query = ('INSERT INTO rated_vcs '
@@ -1348,7 +1414,376 @@ class UserDbConn:
 
     def get_role_reaction(self, message_id: int, emoji: str):
         return self.role_cache.get((message_id, emoji))
+    
+    def is_gym_member(self, member_id: int):
+        query = '''
+            SELECT COUNT(discord_id)
+            FROM gym_members
+            WHERE discord_id = ?
+        '''
+        return self.conn.execute(query, (member_id,)).fetchone()[0] == 1
+        
+    def create_gym_member(self, member_id: int, timezone: str, units: bool):
+        query = '''
+            INSERT INTO gym_members (discord_id, units, tz)
+            VALUES (?, ?, ?)
+        '''
+        self.conn.execute(query, (member_id, units, timezone))
+    
+    def get_gym_member(self, member_id: int, fields: list[str]):
+        query = '''
+            SELECT '''+', '.join(fields)+''' FROM gym_members
+            WHERE discord_id = ?
+        '''
+        return self.conn.execute(query, (member_id,)).fetchone()
 
+    def update_gym_member(self, member_id: int, fields: dict[str, str]):
+        if 'tz' in fields:
+            query = '''
+                SELECT id, datetime FROM gym_sessions
+                WHERE status = "incomplete" AND user = ?
+            '''
+            lst = self.conn.execute(query, (member_id,)).fetchall()
+            lst2 = []
+            for i in lst:
+                lst2+=[int(datetime.datetime.fromtimestamp(i[1],tz=zoneinfo.ZoneInfo(fields['tz'][0])).replace(tzinfo=zoneinfo.ZoneInfo(fields['tz'][1])).timestamp())]
+            for j in paginator.chunkify(list(zip(lst, lst2)), 500):
+                query = '''
+                    UPDATE gym_sessions
+                    SET datetime = CASE id
+                '''+('WHEN ? THEN ?' * len(j))+'''
+                    ELSE datetime
+                    END
+                    WHERE id IN ('''+", ".join(["?"]*len(j))+''')
+                '''
+                self.conn.execute(query, [x for i in j for x in (i[0][0], i[1])]+[i[0][0] for i in j])
+            query = '''
+                SELECT id, next FROM gym_recurring_sessions
+                WHERE next > ? AND user = ?
+            '''
+            lst = self.conn.execute(query, (int(datetime.datetime.now().timestamp()), member_id)).fetchall()
+            lst2 = []
+            for i in lst:
+                lst2+=[int(datetime.datetime.fromtimestamp(i[1],tz=zoneinfo.ZoneInfo(fields['tz'][0])).replace(tzinfo=zoneinfo.ZoneInfo(fields['tz'][1])).timestamp())]
+            for j in paginator.chunkify(list(zip(lst, lst2)), 500):
+                query = '''
+                    UPDATE gym_recurring_sessions
+                    SET next = CASE id
+                '''+('WHEN ? THEN ?' * len(j))+'''
+                    ELSE next
+                    END
+                    WHERE id IN ('''+", ".join(["?"]*len(j))+''')
+                '''
+                self.conn.execute(query, [x for i in j for x in (i[0][0], i[1])]+[i[0][0] for i in j])
+        query = '''
+            UPDATE gym_members
+            SET '''+', '.join([i+" = ?" for i in fields])+'''
+            WHERE discord_id = ?
+        '''
+        self.conn.execute(query, [i[1] for i in fields.values()]+[member_id])
+    def create_session(self, member_id: int, datetime: int):
+        query = '''
+            INSERT INTO gym_sessions (user, datetime, status)
+            VALUES (?, ?, ?)
+        '''
+        self.conn.execute(query, (member_id, datetime, "unresponded"))
+    def get_sessions(self, member_id: int, fields: list[str]):
+        query = '''
+            SELECT '''+', '.join(fields)+''' FROM gym_sessions
+            WHERE user = ?
+            ORDER BY datetime DESC
+        '''
+        return self.conn.execute(query, (member_id,))
+    def skip_days(self, timestamp : int, n : int, tz : str):
+    
+        dt = datetime.datetime.fromtimestamp(timestamp, tz=zoneinfo.ZoneInfo(tz)) + datetime.timedelta(days=7*n)
+        return int(dt.timestamp())
+    
+    def skip_session(self, member_id: int, datetime: int, reason: str, tz:str, check_recurring: bool = True):
+        query = '''
+            UPDATE gym_sessions
+            SET status = ?
+            WHERE user = ? AND datetime = ? AND status = "unresponded"
+        '''
+        if self.conn.execute(query, ("skipped|"+reason, member_id, datetime)).rowcount == 0:
+            return False
+        if not check_recurring:
+            return True
+        
+        query = '''
+            SELECT id FROM gym_recurring_sessions
+            WHERE next = ? AND user = ?
+        '''
+        value = self.conn.execute(query, (datetime, member_id)).fetchone()
+        if value:
+            self.create_session(member_id, self.skip_days(datetime, 1, tz))
+            query = '''
+                UPDATE gym_recurring_sessions
+                SET next = ?
+                WHERE next = ? AND user = ?
+            '''
+            self.conn.execute(query, (self.skip_days(datetime, 1, tz), datetime, member_id))
+        return True
+    def start_session(self, member_id: int):
+        dtnow = int(datetime.datetime.now().timestamp())
+        query = '''
+            SELECT datetime FROM gym_sessions
+            WHERE user = ? AND status = "inprogress"
+        '''
+        dt = self.conn.execute(query, (member_id,)).fetchone()
+        if dt:
+            return False
+        query = '''
+            SELECT datetime FROM gym_sessions
+            WHERE datetime < ? AND datetime > ? AND user = ? AND status = "unresponded"
+            ORDER BY datetime ASC
+        '''
+        
+        dt = self.conn.execute(query, (dtnow+3600, dtnow-3600, member_id)).fetchone()
+        if not dt:
+            self.create_session(member_id, dtnow)
+            dt = self.conn.execute(query, (dtnow+3600, dtnow-3600, member_id)).fetchone()
+
+        query = '''
+            UPDATE gym_sessions
+            SET status = "inprogress"
+            WHERE user = ? AND datetime = ? AND status = "unresponded"
+        '''
+        self.conn.execute(query, (member_id, dt[0]))
+        return True
+    def end_session(self, member_id: int, tz: str):
+        query = '''
+            SELECT datetime FROM gym_sessions
+            WHERE user = ? AND status = "inprogress"
+        '''
+        dt = self.conn.execute(query, (member_id,)).fetchone()
+        if not dt:
+            return False
+        query = '''
+            UPDATE gym_sessions
+            SET status = "complete"
+            WHERE user = ? AND status = "inprogress"
+        '''
+        self.conn.execute(query, (member_id,))
+        
+        query = '''
+            SELECT next FROM gym_recurring_sessions
+            WHERE next = ? AND user = ?
+        '''
+        if self.conn.execute(query, (dt[0], member_id)).fetchone():
+            self.create_session(member_id, self.skip_days(dt[0], 1, tz))
+            query = '''
+                UPDATE gym_recurring_sessions
+                SET next = ?
+                WHERE next = ? AND user = ?
+            '''
+            self.conn.execute(query, (self.skip_days(dt[0], 1, tz), dt[0], member_id))
+        return True
+    def get_session(self, id: int, member_id: int, fields: list[str]):
+        query = '''
+            SELECT '''+', '.join(fields)+''' FROM gym_sessions
+            WHERE id = ? AND user = ?
+        '''
+        return self.conn.execute(query, (id, member_id)).fetchone()
+    
+    def get_workouts(self, session_id: int, member_id: int, fields: list[str]):
+        query = '''
+            SELECT '''+', '.join(fields)+''' FROM gym_workouts
+            WHERE session = ? AND user = ?
+        '''
+        return self.conn.execute(query, (session_id, member_id))
+    def get_records(self, fields: list[str]):
+        query = ('SELECT '+', '.join(fields)+' FROM gym_records')
+        return self.conn.execute(query)
+    def get_records_for_exercise(self, exercise: str):
+        query = '''
+            SELECT gym_records.type, gym_records.amount, gym_workouts.user, gym_sessions.datetime FROM gym_records
+            INNER JOIN gym_workouts ON gym_workouts.id = gym_records.workout AND gym_workouts.exercise = ?
+            INNER JOIN gym_sessions ON gym_workouts.session = gym_sessions.id
+        '''
+        return self.conn.execute(query, (exercise,))
+    def update_record(self, exercise: str):
+        for i in ["sets", "reps", "time", "weight", "length"]:
+            query = '''
+                INSERT INTO gym_records (exercise, type, amount, workout)
+                SELECT ?, ?, gym_workouts.'''+i+''', gym_workouts.id FROM gym_workouts
+                ORDER BY '''+i+''' DESC
+                LIMIT 1
+                ON CONFLICT(exercise, type)
+                DO UPDATE SET amount = excluded.amount, workout = excluded.workout;
+            '''
+            try:
+                self.conn.execute(query, (exercise, i))
+            except:
+                pass
+    def add_workout(self, member_id: int, session_id: int, exercise_name: str, sets: int, reps: int, time: float|None, weight: float|None, length: float|None):
+        query = '''
+            INSERT INTO gym_workouts (user, session, exercise, time, weight, length, sets, reps)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        '''
+        self.conn.execute(query, (member_id, session_id, exercise_name, time, weight, length, sets, reps))
+        self.update_record(exercise_name)
+    
+    def remove_workout(self, id: int, member_id: int):
+        query = '''
+            SELECT exercise FROM gym_workouts
+            WHERE id = ? AND user = ?
+        '''
+        exercise = self.conn.execute(query, (id, member_id)).fetchone()
+        if not exercise:
+            return False
+        query = '''
+            DELETE FROM gym_sessions
+            WHERE id = ?
+        '''
+        self.conn.execute(query, (id,))
+        self.update_record(exercise[0])
+        return True
+    def daytime_to_datetime(self, day : int, time : int, n : int, tz : str):
+        now = datetime.datetime.now(tz=zoneinfo.ZoneInfo(tz))
+        dt = now.date() + datetime.timedelta(days=(day - now.weekday())%7 + 7*n)
+        dt = (datetime.datetime.combine(dt, datetime.datetime.fromtimestamp(time, datetime.UTC).time(), tzinfo=zoneinfo.ZoneInfo(tz)))
+        if dt.timestamp() < datetime.datetime.now().timestamp():
+            dt+=datetime.timedelta(days=7)
+        return int(dt.timestamp())
+    
+    def create_recurring_session(self, member_id: int, day : int, time : int, tz : str):
+        self.create_session(member_id, self.daytime_to_datetime(day, time, 0, tz))
+        query = '''
+            INSERT INTO gym_recurring_sessions (user, day, time, next)
+            VALUES (?, ?, ?, ?)
+        '''
+        self.conn.execute(query, (member_id, day, time, self.daytime_to_datetime(day, time, 0, tz)))
+    
+    def get_recurring_sessions(self, member_id: int, fields : list[str]):
+        query = '''
+            SELECT '''+', '.join(fields)+''' FROM gym_recurring_sessions
+            WHERE user = ?
+        '''
+        return self.conn.execute(query, (member_id,))
+    
+    def get_recurring_sessions_by_day(self, member_id: int, day: int, fields : list[str]):
+        query = '''
+            SELECT '''+', '.join(fields)+''' FROM gym_recurring_sessions
+            WHERE user = ? AND day = ?
+        '''
+        return self.conn.execute(query, (member_id, day))
+    
+    def remove_recurring_session(self, member_id: int, day : int, time : int):
+        query = '''
+            DELETE FROM gym_recurring_sessions
+            WHERE user = ? AND day = ? AND time = ?
+        '''
+        return self.conn.execute(query, (member_id, day, time)).rowcount != 0
+    
+    def skip_recurring_session(self, member_id: int, day : int, time : int, n: int, reason: str, tz : str):
+        query = '''
+            SELECT next FROM gym_recurring_sessions
+            WHERE day = ? AND time = ? AND user = ?
+        '''
+        value = self.conn.execute(query, (day, time, member_id)).fetchone()
+        if not value:
+            return False
+        self.create_session(member_id, self.skip_days(value[0], n, tz))
+        query = '''
+            UPDATE gym_recurring_sessions
+            SET next = ?
+            WHERE next = ? AND user = ?
+        '''
+        self.conn.execute(query, (self.skip_days(value[0], n, tz), value[0], member_id))
+        return self.skip_session(member_id, value[0], reason, tz, False)
+        
+    def get_exercises(self):
+        query = ('SELECT * FROM gym_exercises')
+        return self.conn.execute(query)
+    
+    def create_exercise(self, name: str):
+        query = '''
+            INSERT INTO gym_exercises (name)
+            VALUES (?)
+        '''
+        self.conn.execute(query, (name,))
+
+    def update_exercise(self, name: str, new_name: str):
+        query = '''
+            UPDATE gym_exercises
+            SET name = ?
+            WHERE name = ?
+        '''
+        self.conn.execute(query, (new_name, name))
+    
+    def setup_guild(self, guild_id: int, channel_id: int, role_id: int):
+        self.guild_cache[guild_id] = (channel_id, role_id)
+        query = '''
+            INSERT OR REPLACE INTO gym_guilds (guild, channel, role)
+            VALUES (?, ?, ?)
+        '''
+        self.conn.execute(query, (guild_id, channel_id, role_id))
+
+    def get_guild(self, guild_id: int):
+        if guild_id in self.guild_cache:
+            return self.guild_cache[guild_id]
+        query = '''
+            SELECT channel, role FROM gym_guilds
+            WHERE guild = ?
+        '''
+        val = self.conn.execute(query, (guild_id,)).fetchone()
+        self.guild_cache[guild_id] = val
+        return val
+
+    def get_incomplete_sessions(self):
+        query = '''
+            SELECT user FROM gym_sessions
+            WHERE status = "unresponded" AND datetime < ?
+        '''
+        vals = self.conn.execute(query, (int(datetime.datetime.now().timestamp()-3600),)).fetchall()
+        query = '''
+            UPDATE gym_sessions
+            SET status = "skipped|Did not start on time"
+            WHERE status = "unresponded" AND datetime < ?
+        '''
+        self.conn.execute(query, (int(datetime.datetime.now().timestamp()-3600),))
+        return vals
+    def get_close_sessions(self):
+        query = '''
+            SELECT user, datetime FROM gym_sessions
+            WHERE status = "unresponded" AND datetime < ? AND datetime > ?
+        '''
+        now = int(datetime.datetime.now().timestamp())
+        return self.conn.execute(query, (now+1830, now+1770,)).fetchall()
+
+    def get_open_sessions(self):
+        query = '''
+            SELECT user FROM gym_sessions
+            WHERE status = "inprogress" AND datetime < ?
+        '''
+        vals = self.conn.execute(query, (int(datetime.datetime.now().timestamp()-259200),)).fetchall()
+        query = '''
+            UPDATE gym_sessions
+            SET status = "complete"
+            WHERE status = "inprogress" AND datetime < ?
+        '''
+        self.conn.execute(query, (int(datetime.datetime.now().timestamp()-259200),))
+        return vals
+    def fix_recurring_sessions(self):
+        query = '''
+            SELECT gym_recurring_sessions.id, gym_recurring_sessions.user, gym_recurring_sessions.next, gym_members.tz FROM gym_recurring_sessions
+            INNER JOIN gym_members 
+            ON gym_members.discord_id = gym_recurring_sessions.user AND gym_recurring_sessions.next < ?
+        '''
+        vals = self.conn.execute(query, (int(datetime.datetime.now().timestamp()),)).fetchall()
+        for i in vals:
+            self.create_session(vals[1], self.skip_days(vals[2], 1, vals[3]))
+        for j in paginator.chunkify(vals, 500):
+            query = '''
+                UPDATE gym_recurring_sessions
+                SET next = CASE id
+            '''+('WHEN ? THEN ?' * len(j))++'''
+                ELSE next
+                END
+                WHERE id IN ('''+", ".join(["?"]*len(j))+''')
+            '''
+            self.conn.execute(query, [x for i in j for x in (i[0], self.skip_days(i[2], 1, i[3]))] + [i[0] for i in j])
     def close(self):
         self.conn.close()
 
