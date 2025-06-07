@@ -14,7 +14,7 @@ class RoleCogError(commands.CommandError):
     pass
 
 async def get_solvers(contest_id: int) -> tuple[str, set[str]]:
-    contest, _, ranklist = await cf_api.contest.standings(contest_id=contest_id, group_code="pdEaEqYLGP", as_manager=True, show_unofficial=True)
+    contest, _, ranklist = await cf_api.contest.standings(contest_id=contest_id, group_code="V9EnEktn91", as_manager=True, show_unofficial=True)
     time = datetime.now().timestamp() - contest.durationSeconds
     solvers = set()
     for row in ranklist:
