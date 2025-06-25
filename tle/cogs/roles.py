@@ -9,12 +9,13 @@ from tle.util import codeforces_common as cf_common, codeforces_api as cf_api
 DISCUSSION_CHANNEL_ID = int(environ.get("MOCK_DISCUSSION_CHANNEL_ID", 0))
 REMINDER_CHANNEL_ID = int(environ.get("MOCK_REMINDER_CHANNEL_ID", 0))
 REMINDER_ROLE_ID = int(environ.get("MOCK_REMINDER_ROLE_ID", 0))
+CF_GROUP_ID = environ.get("CF_GROUP_ID", "")
 
 class RoleCogError(commands.CommandError):
     pass
 
 async def get_solvers(contest_id: int) -> tuple[str, set[str]]:
-    contest, _, ranklist = await cf_api.contest.standings(contest_id=contest_id, group_code="V9EnEktn91", as_manager=True, show_unofficial=True)
+    contest, _, ranklist = await cf_api.contest.standings(contest_id=contest_id, group_code=CF_GROUP_ID, as_manager=True, show_unofficial=True)
     time = datetime.now().timestamp() - contest.durationSeconds
     solvers = set()
     for row in ranklist:
@@ -148,7 +149,7 @@ class RolesCog(commands.Cog):
         title, solvers = await get_solvers(contest_id)
 
         reminders: discord.TextChannel = ctx.guild.get_channel(REMINDER_CHANNEL_ID) # type: ignore
-        await reminders.send(f"<@&{REMINDER_ROLE_ID}> The contest window for [{title}]({message.jump_url}) has officially begun. To start your contest window, click on the 'virtual participation' button right below the contest's name on [Codeforces](https://codeforces.com/group/pdEaEqYLGP/contests). As a reminder, we *recommend* that you participate tomorrow from 2:00 PM to 5:00 PM, but it is up to you.\n\nGood luck!")
+        await reminders.send(f"<@&{REMINDER_ROLE_ID}> The contest window for [{title}]({message.jump_url}) has officially begun. To start your contest window, click on the 'virtual participation' button right below the contest's name on [Codeforces](https://codeforces.com/group/{CF_GROUP_ID}/contests). As a reminder, we *recommend* that you participate tomorrow from 2:00 PM to 5:00 PM, but it is up to you.\n\nGood luck!")
 
         discussions: discord.TextChannel = ctx.guild.get_channel(DISCUSSION_CHANNEL_ID) # type: ignore
         thread = await discussions.create_thread(name=f"{title} Discussion", type=discord.ChannelType.private_thread, invitable=False)
