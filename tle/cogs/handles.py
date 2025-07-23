@@ -195,7 +195,8 @@ def get_prettyhandles_image(rows, font):
     # trim name to fit in the column width
     def _trim(name):
         width = WIDTH_NAME - 10
-        while font.getsize(name)[0] > width:
+        left, _, right, _ = font.getbbox(name)
+        while right - left > width:
             name = name[:-4] + '...'  # "…" is printed as floating dots
         return name
 
