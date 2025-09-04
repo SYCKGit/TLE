@@ -1,5 +1,6 @@
 import google.generativeai as genai
 from functools import partial
+from discord import AllowedMentions
 from discord.ext import commands
 from os import environ
 
@@ -44,7 +45,7 @@ class AICog(commands.Cog):
 
     async def break_reply(self, ctx, text):
         while text:
-            await ctx.reply(text[:2000])
+            await ctx.reply(text[:2000], allowed_mentions=AllowedMentions.none())
             text = text[2000:]
 
     @commands.command()
